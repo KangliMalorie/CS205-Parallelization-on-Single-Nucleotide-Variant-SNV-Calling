@@ -195,6 +195,7 @@ Note that each c4.xlarge instance has up to 2 CPU cores, and a default of 4 virt
 
 For Spark on EMR:
 
+- Master Node: c4.xlarge instance 
 - Core Node: c4.xlarge instance (8 instances)
 
 For OpenMP:
