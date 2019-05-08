@@ -86,7 +86,7 @@ National Human Genome Research Institute made the same claim in their report of 
 
 In all, because of the diminishing cost of genome sequencing, more and more genomic data is becoming available for analysis.
 
-<img src="md_costpergenome.jpg" width=500>
+<img src="./figure/md_costpergenome.jpg" width=500>
 
 **Compute Infrastructure Limitation: Big Compute** 
 
@@ -104,7 +104,7 @@ In all, given the size of the data and computing power required for analysis, we
 
 #### How the Model Works
 
-<img src="md_modelchart.png" width=500>
+<img src="./figure/md_modelchart.png" width=500>
 
 The chart above explains the flow of our model.
 
@@ -116,13 +116,13 @@ The inputs are BAM reads files of length 101. Each entry of the files contain in
 
 The second step is extremely essential. In this step, the AlleleParser.cpp program converts Registered Alignment files into sorted Registered Alleles files. As shown in the graph below, we have from step one rows of reads. In reads sections, there can be loci which contain different allels that are very close to each other. The adjacency of such loci makes it unreasonable to directly partition reads into sections and parallelize on them. Thus, we run the Registered Alignment files through AlleleParcer.cpp and generate Registered Alleles files. Registered Alleles files consist of alleles that a independent from each other and their features such as base, position, referent allele (according to the referent Fasta file), etc. Note that each locus can have up to 4 alleles. Such independent alleles can be easily separated from the others and carried into the next step of analysis involving parallelization.
 
-<img src="md_registeredalleles.png" width=500>
+<img src="./figure/md_registeredalleles.png" width=500>
 
 ##### Step Three
 
 In this step, our model take as inputs the Fasta file and Bam files, using them to determine the start and end positions and corresponding loci. It then incorporates those with the previously partitioned Registered Alleles files, and converts the Registered Alleles files into the final outputs -- VCF files via the FreeBayes algorithm. 
 
-<img src="md_stepthree.png" width=500>
+<img src="./figure/md_stepthree.png" width=500>
 
 **The Bayesian Approach(https://arxiv.org/pdf/1207.3907.pdf)**
 
@@ -130,14 +130,14 @@ In this step, our model take as inputs the Fasta file and Bam files, using them 
 
 For example, given a set of genotypes G1, ..., Gn and observations R1, ..., Rn for all individuals at the current genetic locus, we can use Bayes’ theorem to related the probability of a specific combination of genotypes to both **the quality of sequencing observations** and **a priori expectations** about the distribution of alleles:
 
-<img src="md_bayesian formula.png">
+<img src="./figure/md_bayesian formula.png">
 
 Under this decomposition, we have the likelihood that our observations match a given genotype combination (our data likelihood), and
 P(G1, ..., Gn), which represents the prior likelihood of observing a specific genotype combination. We estimate the data likelihood as the joint probability that the observations for a specific individual support a given genotype. 
 
 **FreeBayes' Role in Our Model**
 
-<img src="md_freebayes.png">
+<img src="./figure/md_freebayes.png">
 
 To simply put it, there are two main steps that FreeBayes repeatedly performs: **Jump to the next position** and **find alleles.** This is easy to understand by the names. On one position, FreeBayes find all the alleles and perform the bayesian approach. Then, it jumps to the next locus and find all the allels. The process keeps going on. These two steps constitute most of the runtime of our model. In order to speed up, we applied parallelization to both the Fasta file and Bam files in this major step. Specific reasons of this scheme and detailed parallelization methods are explained in depth in the [Speedup Techniques](#speedup-techniques-programming-model-details) part.
 
@@ -290,7 +290,7 @@ export PATH=/home/hadoop/adam/bin:$PATH
 
 If successfully compiled should see this:
 
-![adam compile](adam_1.png)
+<img src="./figure/adam_1.png">
 
 **Test if Adam is working**
 
@@ -565,11 +565,11 @@ ip-172-30-8-12
 **Batch Install packages**
 1.  Go to run command
 
-<img src="gotoruncommand.png" width=300>
+<img src="./figure/gotoruncommand.png" width=300>
 
 2.  Select command document to be "AWS-RunShellScript"
 
-<img src="runshellscript.png" width=300>
+<img src="./figure/runshellscript.png" width=300>
 
 3.  Put commands into command box
 
@@ -839,7 +839,7 @@ Based on the previous sections, we argue why we could chop .bam file to achieve 
 
 Then we use GNU parallel for execution with pre-defined fasta regions and our .bam files. Rather than directly save the .bam files, we propose a new way: Freebayes could use .bam files from stdin with argument ```-c```. We could take advantage of it, which could reduce the I/O overheads to some extends.
 
-<img src="chopbamdetail.png" width=500>
+<img src="./figure/chopbamdetail.png" width=500>
 
 #### Strategy II：Use OpenMP to parallelize for loops in Freebayes main function
 
@@ -868,7 +868,9 @@ Cannoli is a wrapper built upon ADAM's core API. It covers common used bioinform
 External commands wrapped by Cannoli should be installed to each executor node in the cluster.
 
 ##### Architecture
-<img src="sparkdetail.png" width=500>
+
+<img src="./figure/sparkdetail.png" width=500>
+
 Spark architecture: ADAM is built on Spark engine. Spark uses master/slave architecture with one central coordinator and many distributed workers. Each worker is a separate java process. In our EMR, Spark works with open source cluster manager Hadoop Yarn. The master, also known as the driver, is the process that runs the user code that creates RDDs, and performs transformation and action. The driver program asks Yarn for the resources to launch executors. Yarn as the Apache Spark Cluster Manager launches executors. On the cluster manager, jobs and actions within a spark application scheduled by Spark Scheduler in a FIFO fashion. The scheduler in Spark is a Directed Acycli Graph (DAG) scheduler. It provides a drastic speedup since compared to Hadoop MapReduce since it processes in memory. In Hadoop MapReduce, every result is written back to disk. Hence between two map-reduce jobs there might be irrelevant write backs.
 
 ADAM Context: ADAM uses Apache Spark as a computational engine. Only instead of SparkContext, it has its own ADAMContext which wraps SparkContext. Users use the ADAMContext to load data as GenomicDatasets, which they can then manipulate. ADAM exposes access to distributed datasets of genomic data through the ADAMContext entrypoint. The ADAMContext provides data loading functions which yield GenomicDatasets. The GenomicDataset classes provide a wrapper around Apache Spark’s two APIs for manipulating distributed datasets: the legacy Resilient Distributed Dataset and the new Spark SQL Dataset/DataFrame API. Additionally, the GenomicDataset is enriched with genomics-specific metadata such as computational lineage and sample metadata, and optimized genomics-specific query patterns such as region joins and the auto-parallelizing pipe API for running legacy tools using Apache Spark. All GenomicDatasets include a sequence dictionary which describes the reference genome that the data in the genomic dataset are aligned to.
